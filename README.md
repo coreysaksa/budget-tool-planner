@@ -21,6 +21,17 @@ pip install -e ".[dev]"
 uvicorn planner.service:app --port 8003
 ```
 
+## Deploy to Azure (Container Apps)
+
+Runs as an **Azure Container App** provisioned by `budget-infra` (shared Container
+Apps environment + ACR + the `budgetai-planner` app, bound to the shared managed
+identity). Deploy `budget-infra` first, then set the GitHub **secrets**
+`AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID` and **variables**
+`AZURE_RESOURCE_GROUP`, `ACR_NAME`, and `CONTAINER_APP_NAME` (`budgetai-planner`).
+Push to `main` (or run **Deploy (Planner)**) to build via `az acr build` and roll the
+container app.
+
 ## Status
 
-Scaffold with a simple proportional planner.
+Scaffold with a simple proportional planner. Containerized and deployable to Azure
+Container Apps.
