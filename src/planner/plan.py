@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from .models import BudgetLine, BudgetPlan, Goal
 
-ESSENTIAL = {"groceries", "utilities", "mortgage"}
+# Non-debt "mandatory" categories from the analyzer taxonomy. Debt (credit cards /
+# loans) is intentionally excluded here because the payoff scheduler funds it.
+ESSENTIAL = {"housing", "utilities", "groceries", "insurance", "healthcare", "transport"}
 
 
 def build_plan(
