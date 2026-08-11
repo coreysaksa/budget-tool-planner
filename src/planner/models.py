@@ -39,3 +39,88 @@ class BudgetPlan(BaseModel):
     petty_cash_allocation: float = 0.0
     goal_contributions: dict[str, float] = Field(default_factory=dict)
     unallocated: float = 0.0
+
+
+class Windfall(BaseModel):
+    name: str
+    amount: float
+    date: str
+    status: str = "estimated"  # "confirmed" | "estimated"
+
+
+class PaycheckInput(BaseModel):
+    name: str = "Paycheck"
+    amount: float
+    day: int = Field(ge=1, le=31)
+
+
+class NecessityOverride(BaseModel):
+    merchant: str
+    necessity: str  # "mandatory" | "discretionary"
+
+
+class CashFlowAccount(BaseModel):
+    id: str
+    name: str
+    type: str
+    balance: float = 0.0
+    minimum_payment: float | None = None
+
+
+class ScheduledCashItem(BaseModel):
+    name: str
+    amount: float
+    date: str | None = None
+    category: str
+    confirmed: bool = True
+
+
+class PayPeriodPlan(BaseModel):
+    label: str
+    start_date: str
+    end_date: str
+    current: bool = False
+    required_starting_balance: float = 0.0
+    scheduled_income: list[ScheduledCashItem] = Field(default_factory=list)
+    obligations: list[ScheduledCashItem] = Field(default_factory=list)
+    essential_allowance: float = 0.0
+    checking_buffer: float = 0.0
+    safe_extra_payment: float = 0.0
+
+
+class CashFlowScenario(BaseModel):
+    name: str
+    includes_estimated_windfalls: bool = False
+    windfall_total: float = 0.0
+    safe_extra_payment: float = 0.0
+    pay_periods: list[PayPeriodPlan] = Field(default_factory=list)
+
+
+class SavingsOpportunity(BaseModel):
+    category: str
+    description: str
+    current_monthly_spend: float
+    current_monthly_count: int
+    target_monthly_count: int
+    potential_monthly_savings: float
+
+
+class ClarificationQuestion(BaseModel):
+    code: str
+    question: str
+    context: str | None = None
+    critical: bool = False
+
+
+class CashFlowPlan(BaseModel):
+    month: str
+    as_of: str
+    checking_balance: float = 0.0
+    pay_schedule_confidence: str = "unknown"
+    pay_schedule_description: str | None = None
+    minimum_to_survive: float = 0.0
+    recurring_safe_extra_payment: float = 0.0
+    scenarios: list[CashFlowScenario] = Field(default_factory=list)
+    savings_opportunities: list[SavingsOpportunity] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    clarification_questions: list[ClarificationQuestion] = Field(default_factory=list)

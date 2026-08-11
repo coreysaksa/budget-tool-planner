@@ -14,6 +14,12 @@ it produces a **BudgetPlan** with:
 - a **petty-cash allocation** for the discretionary checking account,
 - goal contributions, feasibility-checked against income/outflow.
 
+`POST /cash-flow-plan` also builds a deterministic current-month payday plan from
+account balances, categorized transactions, recurring bills, paycheck history,
+minimum debt payments, and confirmed/estimated windfalls. It returns first-half
+and second-half survival balances, safe extra card-payment capacity, savings
+opportunities, assumptions, and focused clarification questions.
+
 ## Run (local dev)
 
 ```
