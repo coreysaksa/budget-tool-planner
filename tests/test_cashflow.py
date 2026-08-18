@@ -2,6 +2,7 @@ from datetime import date
 
 from planner.cashflow import build_cash_flow_plan
 from planner.models import (
+    BudgetBaselineItem,
     CashFlowAccount,
     NecessityOverride,
     PaycheckInput,
@@ -269,6 +270,68 @@ def test_user_necessity_override_resolves_ambiguous_bill():
         for period in plan.scenarios[0].pay_periods
         for item in period.obligations
     )
+
+
+def test_confirmed_baseline_replaces_transaction_average():
+    plan = build_cash_flow_plan(
+        as_of=date(2026, 8, 10),
+        month="2026-08",
+        accounts=[
+            CashFlowAccount(id="checking", name="Checking", type="checking", balance=500),
+            CashFlowAccount(
+                id="card",
+                name="Rewards Card",
+                type="credit",
+                balance=-3000,
+                minimum_payment=75,
+            ),
+        ],
+        spending_tree=_spending_tree(),
+        income_tree=_income_tree(),
+        recurring=[],
+        transfers=[],
+        period_days=60,
+        windfalls=[],
+        budget_baseline=[
+            BudgetBaselineItem(
+                id="mortgage-primary",
+                name="Primary mortgage",
+                category="mortgage",
+                kind="fixed",
+                monthly_amount=1844,
+                due_day=1,
+                source="confirmed",
+                confidence="high",
+            ),
+            BudgetBaselineItem(
+                id="mortgage-second",
+                name="Second mortgage",
+                category="mortgage",
+                kind="fixed",
+                monthly_amount=750,
+                due_day=15,
+                source="confirmed",
+                confidence="high",
+            ),
+            BudgetBaselineItem(
+                id="fuel",
+                name="Fuel",
+                category="fuel",
+                kind="variable",
+                monthly_amount=200,
+                source="confirmed",
+                confidence="high",
+            ),
+        ],
+    )
+
+    assert plan.monthly_survival_budget == 2869
+    assert {item.name for item in plan.survival_budget_breakdown} >= {
+        "Primary mortgage",
+        "Second mortgage",
+        "Fuel",
+        "Rewards Card minimum",
+    }
 
 
 def test_same_day_paycheck_is_not_added_to_live_checking_balance_again():

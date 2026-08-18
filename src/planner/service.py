@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from .cashflow import build_cash_flow_plan
 from .models import (
+    BudgetBaselineItem,
     CashFlowAccount,
     Goal,
     NecessityOverride,
@@ -43,6 +44,7 @@ class CashFlowPlanRequest(BaseModel):
     windfalls: list[Windfall] = Field(default_factory=list)
     paychecks: list[PaycheckInput] = Field(default_factory=list)
     necessity_overrides: list[NecessityOverride] = Field(default_factory=list)
+    budget_baseline: list[BudgetBaselineItem] = Field(default_factory=list)
     checking_buffer: float = 250.0
 
 
@@ -60,5 +62,6 @@ def cash_flow_plan_endpoint(req: CashFlowPlanRequest):
         windfalls=req.windfalls,
         paychecks=req.paychecks,
         necessity_overrides=req.necessity_overrides,
+        budget_baseline=req.budget_baseline,
         checking_buffer=req.checking_buffer,
     )

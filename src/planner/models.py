@@ -59,6 +59,27 @@ class NecessityOverride(BaseModel):
     necessity: str  # "mandatory" | "discretionary"
 
 
+class BudgetBaselineItem(BaseModel):
+    id: str
+    name: str
+    category: str
+    kind: str = "fixed"  # "fixed" | "variable"
+    monthly_amount: float = 0.0
+    due_day: int | None = Field(default=None, ge=1, le=31)
+    source: str = "inferred"  # "inferred" | "confirmed"
+    confidence: str = "low"
+    active: bool = True
+
+
+class SurvivalBudgetItem(BaseModel):
+    id: str
+    name: str
+    category: str
+    monthly_amount: float
+    source: str
+    confidence: str
+
+
 class CashFlowAccount(BaseModel):
     id: str
     name: str
@@ -119,6 +140,8 @@ class CashFlowPlan(BaseModel):
     pay_schedule_confidence: str = "unknown"
     pay_schedule_description: str | None = None
     minimum_to_survive: float = 0.0
+    monthly_survival_budget: float = 0.0
+    survival_budget_breakdown: list[SurvivalBudgetItem] = Field(default_factory=list)
     recurring_safe_extra_payment: float = 0.0
     scenarios: list[CashFlowScenario] = Field(default_factory=list)
     savings_opportunities: list[SavingsOpportunity] = Field(default_factory=list)

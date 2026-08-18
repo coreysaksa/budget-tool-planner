@@ -9,6 +9,7 @@ from statistics import median
 from typing import Any
 
 from .models import (
+    BudgetBaselineItem,
     CashFlowAccount,
     CashFlowPlan,
     CashFlowScenario,
@@ -484,6 +485,7 @@ def build_cash_flow_plan(
     windfalls: list[Windfall],
     paychecks: list[PaycheckInput] | None = None,
     necessity_overrides: list[NecessityOverride] | None = None,
+    budget_baseline: list[BudgetBaselineItem] | None = None,
     checking_buffer: float = 250.0,
 ) -> CashFlowPlan:
     """Build survival targets and safe debt-payment capacity for one calendar month."""
@@ -527,8 +529,9 @@ def build_cash_flow_plan(
     spending_txns, dining_spend, dining_count, mandatory_by_half = _flatten_spending(
         spending_tree, overrides
     )
+    baseline = [item for item in (budget_baseline or []) if item.active]
     obligations = _obligations(
-        recurring,
+        [] if baseline else recurring,
         spending_txns,
         accounts,
         transfers,
@@ -538,17 +541,39 @@ def build_cash_flow_plan(
         questions,
         overrides,
     )
-    monthly_mandatory = (
-        sum(
-            row["amount_value"]
-            for row in spending_txns
-            if row["mandatory"]
+    if baseline:
+        for item in baseline:
+            if item.kind != "fixed" or item.monthly_amount <= 0:
+                continue
+            obligations.append(
+                ScheduledCashItem(
+                    name=item.name,
+                    amount=round(item.monthly_amount, 2),
+                    date=_month_date(year, mon, item.due_day or 1).isoformat(),
+                    category=item.category,
+                    confirmed=item.source == "confirmed",
+                )
+            )
+        variable_essential = sum(
+            max(0.0, item.monthly_amount)
+            for item in baseline
+            if item.kind == "variable"
         )
-        * 30.0
-        / max(period_days, 1)
-    )
-    fixed_obligations = sum(item.amount for item in obligations)
-    variable_essential = max(0.0, monthly_mandatory - fixed_obligations)
+        assumptions.append(
+            "Confirmed budget-baseline items replace transaction averages for survival planning."
+        )
+    else:
+        monthly_mandatory = (
+            sum(
+                row["amount_value"]
+                for row in spending_txns
+                if row["mandatory"]
+            )
+            * 30.0
+            / max(period_days, 1)
+        )
+        fixed_obligations = sum(item.amount for item in obligations)
+        variable_essential = max(0.0, monthly_mandatory - fixed_obligations)
     observed_total = mandatory_by_half[1] + mandatory_by_half[2]
     first_ratio = mandatory_by_half[1] / observed_total if observed_total else 0.5
     essential_by_period = [
@@ -639,6 +664,63 @@ def build_cash_flow_plan(
         ),
         default=max(0.0, checking_buffer),
     )
+    if baseline:
+        breakdown = [
+            {
+                "id": item.id,
+                "name": item.name,
+                "category": item.category,
+                "monthly_amount": round(max(0.0, item.monthly_amount), 2),
+                "source": item.source,
+                "confidence": item.confidence,
+            }
+            for item in baseline
+        ]
+        baseline_ids = {item.id for item in baseline}
+        for account in accounts:
+            if (
+                account.type == "credit"
+                and account.minimum_payment
+                and account.minimum_payment > 0
+            ):
+                item_id = f"minimum-{account.id}"
+                if item_id not in baseline_ids:
+                    breakdown.append(
+                        {
+                            "id": item_id,
+                            "name": f"{account.name} minimum",
+                            "category": "minimum_debt_payment",
+                            "monthly_amount": round(account.minimum_payment, 2),
+                            "source": "account",
+                            "confidence": "high",
+                        }
+                    )
+    else:
+        breakdown = [
+            {
+                "id": f"obligation-{index}",
+                "name": item.name,
+                "category": item.category,
+                "monthly_amount": round(item.amount, 2),
+                "source": "inferred",
+                "confidence": "medium",
+            }
+            for index, item in enumerate(obligations)
+        ]
+        if variable_essential > 0:
+            breakdown.append(
+                {
+                    "id": "variable-essentials",
+                    "name": "Variable essentials",
+                    "category": "variable_essentials",
+                    "monthly_amount": round(variable_essential, 2),
+                    "source": "inferred",
+                    "confidence": "low",
+                }
+            )
+    monthly_survival_budget = sum(
+        float(item["monthly_amount"]) for item in breakdown
+    )
     return CashFlowPlan(
         month=plan_month,
         as_of=as_of.isoformat(),
@@ -646,6 +728,8 @@ def build_cash_flow_plan(
         pay_schedule_confidence=confidence,
         pay_schedule_description=description,
         minimum_to_survive=round(minimum_to_survive, 2),
+        monthly_survival_budget=round(monthly_survival_budget, 2),
+        survival_budget_breakdown=breakdown,
         recurring_safe_extra_payment=round(recurring_safe_extra, 2),
         scenarios=scenarios,
         savings_opportunities=opportunities,
