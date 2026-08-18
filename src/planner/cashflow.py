@@ -24,6 +24,7 @@ from .models import (
 
 _MANDATORY_LEAVES = {
     "mortgage",
+    "hoa",
     "rent",
     "student_loan",
     "credit_card_payment",
