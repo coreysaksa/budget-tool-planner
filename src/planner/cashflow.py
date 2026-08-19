@@ -43,6 +43,41 @@ _MANDATORY_LEAVES = {
     "user_mandatory",
 }
 _DINING_LEAVES = {"dining", "coffee", "delivery"}
+_SURVIVAL_ROLLUPS = {
+    "mortgage": "housing",
+    "hoa": "housing",
+    "hoa_fees": "housing",
+    "house_maintenance": "housing",
+    "rent": "housing",
+    "car_loans": "transportation",
+    "car_payment": "transportation",
+    "fuel": "transportation",
+    "tolls": "transportation",
+    "transit": "transportation",
+    "car_subscription": "transportation",
+    "internet": "utilities",
+    "cell_phone": "utilities",
+    "electric": "utilities",
+    "gas_utility": "utilities",
+    "water": "utilities",
+    "groceries": "food_essentials",
+    "pet_food": "pets",
+    "pet_grooming": "pets",
+    "healthcare": "healthcare",
+    "insurance": "insurance",
+    "student_loan": "debt_obligations",
+    "loan_payment": "debt_obligations",
+}
+_SURVIVAL_ROLLUP_LABELS = {
+    "housing": "Housing",
+    "transportation": "Transportation",
+    "utilities": "Utilities",
+    "food_essentials": "Food essentials",
+    "pets": "Pet essentials",
+    "healthcare": "Healthcare",
+    "insurance": "Insurance reserves",
+    "debt_obligations": "Other debt obligations",
+}
 
 
 def _parse_date(value: Any) -> date | None:
@@ -50,6 +85,36 @@ def _parse_date(value: Any) -> date | None:
         return date.fromisoformat(str(value)[:10])
     except (TypeError, ValueError):
         return None
+
+
+def _roll_up_survival_baseline(
+    baseline: list[BudgetBaselineItem],
+) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    confidence_rank = {"low": 0, "medium": 1, "high": 2}
+    for item in baseline:
+        key = _SURVIVAL_ROLLUPS.get(item.category, item.category)
+        row = grouped.setdefault(
+            key,
+            {
+                "id": f"rollup-{key}",
+                "name": _SURVIVAL_ROLLUP_LABELS.get(key, item.name),
+                "category": key,
+                "monthly_amount": 0.0,
+                "source": "confirmed",
+                "confidence": "high",
+            },
+        )
+        row["monthly_amount"] += max(0.0, item.monthly_amount)
+        if item.source != "confirmed":
+            row["source"] = "inferred"
+        if confidence_rank.get(item.confidence, 0) < confidence_rank.get(
+            row["confidence"], 0
+        ):
+            row["confidence"] = item.confidence
+    for row in grouped.values():
+        row["monthly_amount"] = round(row["monthly_amount"], 2)
+    return list(grouped.values())
 
 
 def _month_date(year: int, month: int, day: int) -> date:
@@ -671,37 +736,27 @@ def build_cash_flow_plan(
         default=max(0.0, checking_buffer),
     )
     if baseline:
-        breakdown = [
-            {
-                "id": item.id,
-                "name": item.name,
-                "category": item.category,
-                "monthly_amount": round(max(0.0, item.monthly_amount), 2),
-                "source": item.source,
-                "confidence": item.confidence,
-            }
-            for item in baseline
-        ]
+        breakdown = _roll_up_survival_baseline(baseline)
         baseline_ids = {item.id for item in baseline}
-        for account in accounts:
-            if (
-                account.type == "credit"
-                and abs(account.balance) > 0.01
-                and account.minimum_payment
-                and account.minimum_payment > 0
-            ):
-                item_id = f"minimum-{account.id}"
-                if item_id not in baseline_ids:
-                    breakdown.append(
-                        {
-                            "id": item_id,
-                            "name": f"{account.name} minimum",
-                            "category": "minimum_debt_payment",
-                            "monthly_amount": round(account.minimum_payment, 2),
-                            "source": "account",
-                            "confidence": "high",
-                        }
-                    )
+        minimum_total = sum(
+            account.minimum_payment
+            for account in accounts
+            if account.type == "credit"
+            and abs(account.balance) > 0.01
+            and account.minimum_payment
+            and account.minimum_payment > 0
+        )
+        if minimum_total > 0 and "minimum-credit-cards" not in baseline_ids:
+            breakdown.append(
+                {
+                    "id": "minimum-credit-cards",
+                    "name": "Credit card minimum payments",
+                    "category": "minimum_debt_payment",
+                    "monthly_amount": round(minimum_total, 2),
+                    "source": "account",
+                    "confidence": "high",
+                }
+            )
     else:
         breakdown = [
             {

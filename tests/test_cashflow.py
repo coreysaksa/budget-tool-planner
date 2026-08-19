@@ -285,6 +285,13 @@ def test_confirmed_baseline_replaces_transaction_average():
                 balance=-3000,
                 minimum_payment=75,
             ),
+            CashFlowAccount(
+                id="card-2",
+                name="Travel Card",
+                type="credit",
+                balance=-1200,
+                minimum_payment=40,
+            ),
         ],
         spending_tree=_spending_tree(),
         income_tree=_income_tree(),
@@ -325,13 +332,30 @@ def test_confirmed_baseline_replaces_transaction_average():
         ],
     )
 
-    assert plan.monthly_survival_budget == 2869
+    assert plan.monthly_survival_budget == 2909
     assert {item.name for item in plan.survival_budget_breakdown} >= {
-        "Primary mortgage",
-        "Second mortgage",
-        "Fuel",
-        "Rewards Card minimum",
+        "Housing",
+        "Transportation",
+        "Credit card minimum payments",
     }
+    housing = next(
+        item
+        for item in plan.survival_budget_breakdown
+        if item.category == "housing"
+    )
+    transportation = next(
+        item
+        for item in plan.survival_budget_breakdown
+        if item.category == "transportation"
+    )
+    assert housing.monthly_amount == 2594
+    assert transportation.monthly_amount == 200
+    minimums = next(
+        item
+        for item in plan.survival_budget_breakdown
+        if item.category == "minimum_debt_payment"
+    )
+    assert minimums.monthly_amount == 115
 
 
 def test_periodic_baseline_contribution_and_card_minimum_are_counted_once():
@@ -378,9 +402,50 @@ def test_periodic_baseline_contribution_and_card_minimum_are_counted_once():
 
     assert plan.monthly_survival_budget == 167.50
     assert {item.name for item in plan.survival_budget_breakdown} == {
-        "Car insurance reserve",
-        "Rewards Card minimum",
+        "Insurance reserves",
+        "Credit card minimum payments",
     }
+
+
+def test_survival_breakdown_rolls_all_mandatory_housing_and_transportation():
+    plan = build_cash_flow_plan(
+        as_of=date(2026, 8, 16),
+        month="2026-08",
+        accounts=[],
+        spending_tree=[],
+        income_tree=_income_tree(),
+        recurring=[],
+        transfers=[],
+        period_days=30,
+        windfalls=[],
+        budget_baseline=[
+            BudgetBaselineItem(
+                id=category,
+                name=category,
+                category=category,
+                monthly_amount=amount,
+                source="inferred",
+                confidence="medium",
+            )
+            for category, amount in (
+                ("mortgage", 2630.31),
+                ("hoa_fees", 522.95),
+                ("house_maintenance", 204.16),
+                ("car_loans", 691.37),
+                ("fuel", 180),
+                ("tolls", 262.50),
+                ("car_subscription", 9.99),
+            )
+        ],
+    )
+
+    rollups = {
+        item.category: item.monthly_amount
+        for item in plan.survival_budget_breakdown
+    }
+    assert rollups["housing"] == 3357.42
+    assert rollups["transportation"] == 1143.86
+    assert plan.monthly_survival_budget == 4501.28
 
 
 def test_zero_balance_card_minimum_is_not_in_survival_budget():
