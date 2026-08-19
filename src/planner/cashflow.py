@@ -558,10 +558,10 @@ def build_cash_flow_plan(
         variable_essential = sum(
             max(0.0, item.monthly_amount)
             for item in baseline
-            if item.kind == "variable"
+            if item.kind in {"variable", "periodic"}
         )
         assumptions.append(
-            "Confirmed budget-baseline items replace transaction averages for survival planning."
+            "Confirmed budget-baseline items replace transaction averages; periodic items contribute their monthly sinking-fund amount."
         )
     else:
         monthly_mandatory = (

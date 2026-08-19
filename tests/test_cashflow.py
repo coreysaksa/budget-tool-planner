@@ -334,6 +334,55 @@ def test_confirmed_baseline_replaces_transaction_average():
     }
 
 
+def test_periodic_baseline_contribution_and_card_minimum_are_counted_once():
+    plan = build_cash_flow_plan(
+        as_of=date(2026, 8, 16),
+        month="2026-08",
+        accounts=[
+            CashFlowAccount(id="checking", name="Checking", type="checking", balance=500),
+            CashFlowAccount(
+                id="card",
+                name="Rewards Card",
+                type="credit",
+                balance=-3000,
+                minimum_payment=75,
+            ),
+        ],
+        spending_tree=[],
+        income_tree=_income_tree(),
+        recurring=[],
+        transfers=[
+            {
+                "date": "2026-08-10",
+                "amount": 5000,
+                "category": "credit card payment",
+                "role": "debt_service_cash_outflow",
+            }
+        ],
+        period_days=30,
+        windfalls=[],
+        budget_baseline=[
+            BudgetBaselineItem(
+                id="insurance",
+                name="Car insurance reserve",
+                category="insurance",
+                kind="periodic",
+                monthly_amount=92.50,
+                periodic_amount=555,
+                frequency_months=6,
+                source="confirmed",
+                confidence="high",
+            )
+        ],
+    )
+
+    assert plan.monthly_survival_budget == 167.50
+    assert {item.name for item in plan.survival_budget_breakdown} == {
+        "Car insurance reserve",
+        "Rewards Card minimum",
+    }
+
+
 def test_same_day_paycheck_is_not_added_to_live_checking_balance_again():
     plan = build_cash_flow_plan(
         as_of=date(2026, 8, 16),

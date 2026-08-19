@@ -63,9 +63,15 @@ class BudgetBaselineItem(BaseModel):
     id: str
     name: str
     category: str
-    kind: str = "fixed"  # "fixed" | "variable"
+    kind: str = "fixed"  # "fixed" | "variable" | "periodic"
     monthly_amount: float = 0.0
     due_day: int | None = Field(default=None, ge=1, le=31)
+    periodic_amount: float | None = None
+    frequency_months: int | None = Field(default=None, ge=1)
+    next_due_date: str | None = None
+    reserved_balance: float = 0.0
+    funding_account_id: str | None = None
+    review_required: bool = False
     source: str = "inferred"  # "inferred" | "confirmed"
     confidence: str = "low"
     active: bool = True
