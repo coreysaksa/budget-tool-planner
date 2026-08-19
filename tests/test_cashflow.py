@@ -383,6 +383,33 @@ def test_periodic_baseline_contribution_and_card_minimum_are_counted_once():
     }
 
 
+def test_zero_balance_card_minimum_is_not_in_survival_budget():
+    plan = build_cash_flow_plan(
+        as_of=date(2026, 8, 16),
+        month="2026-08",
+        accounts=[
+            CashFlowAccount(id="checking", name="Checking", type="checking", balance=500),
+            CashFlowAccount(
+                id="card",
+                name="Paid Card",
+                type="credit",
+                balance=0,
+                minimum_payment=75,
+            ),
+        ],
+        spending_tree=[],
+        income_tree=_income_tree(),
+        recurring=[],
+        transfers=[],
+        period_days=30,
+        windfalls=[],
+        budget_baseline=[],
+    )
+
+    assert plan.monthly_survival_budget == 0
+    assert not any("Paid Card" in item.name for item in plan.survival_budget_breakdown)
+
+
 def test_same_day_paycheck_is_not_added_to_live_checking_balance_again():
     plan = build_cash_flow_plan(
         as_of=date(2026, 8, 16),

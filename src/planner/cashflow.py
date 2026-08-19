@@ -307,7 +307,12 @@ def _obligations(
         )
 
     for account in accounts:
-        if account.type != "credit" or not account.minimum_payment or account.minimum_payment <= 0:
+        if (
+            account.type != "credit"
+            or abs(account.balance) <= 0.01
+            or not account.minimum_payment
+            or account.minimum_payment <= 0
+        ):
             continue
         payment_days = [
             when.day
@@ -681,6 +686,7 @@ def build_cash_flow_plan(
         for account in accounts:
             if (
                 account.type == "credit"
+                and abs(account.balance) > 0.01
                 and account.minimum_payment
                 and account.minimum_payment > 0
             ):
