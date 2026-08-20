@@ -435,6 +435,9 @@ def test_survival_breakdown_rolls_all_mandatory_housing_and_transportation():
                 ("fuel", 180),
                 ("tolls", 262.50),
                 ("car_subscription", 9.99),
+                ("car_maintenance", 100),
+                ("vehicle_property_tax", 50),
+                ("property_tax", 75),
             )
         ],
     )
@@ -443,9 +446,9 @@ def test_survival_breakdown_rolls_all_mandatory_housing_and_transportation():
         item.category: item.monthly_amount
         for item in plan.survival_budget_breakdown
     }
-    assert rollups["housing"] == 3357.42
-    assert rollups["transportation"] == 1143.86
-    assert plan.monthly_survival_budget == 4501.28
+    assert rollups["housing"] == 3432.42
+    assert rollups["transportation"] == 1293.86
+    assert plan.monthly_survival_budget == 4726.28
 
 
 def test_zero_balance_card_minimum_is_not_in_survival_budget():
