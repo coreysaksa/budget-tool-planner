@@ -1,6 +1,6 @@
 from datetime import date
 
-from planner.cashflow import build_cash_flow_plan
+from planner.cashflow import _MANDATORY_LEAVES, build_cash_flow_plan
 from planner.models import (
     BudgetBaselineItem,
     CashFlowAccount,
@@ -449,6 +449,33 @@ def test_survival_breakdown_rolls_all_mandatory_housing_and_transportation():
     assert rollups["housing"] == 3432.42
     assert rollups["transportation"] == 1293.86
     assert plan.monthly_survival_budget == 4726.28
+
+
+def test_recurring_mandatory_taxonomy_aliases_are_scheduled():
+    assert {
+        "mortgage",
+        "hoa",
+        "hoa_fees",
+        "rent",
+        "student_loan",
+        "credit_card_payment",
+        "loan_payment",
+        "car_loans",
+        "car_maintenance",
+        "vehicle_property_tax",
+        "property_tax",
+        "internet",
+        "cell_phone",
+        "electric",
+        "gas_utility",
+        "water",
+        "groceries",
+        "insurance",
+        "healthcare",
+        "fuel",
+        "tolls",
+        "transit",
+    }.issubset(_MANDATORY_LEAVES)
 
 
 def test_zero_balance_card_minimum_is_not_in_survival_budget():
