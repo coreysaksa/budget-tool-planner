@@ -15,12 +15,12 @@ def _income_tree():
         {
             "source": "ACME PAYROLL",
             "transactions": [
-                {"date": "2026-06-01", "amount": 2500},
-                {"date": "2026-06-16", "amount": 2500},
-                {"date": "2026-07-01", "amount": 2500},
-                {"date": "2026-07-16", "amount": 2500},
-                {"date": "2026-08-01", "amount": 2500},
-                {"date": "2026-08-16", "amount": 2500},
+                {"date": "2026-06-15", "amount": 2500},
+                {"date": "2026-06-30", "amount": 2500},
+                {"date": "2026-07-15", "amount": 2500},
+                {"date": "2026-07-31", "amount": 2500},
+                {"date": "2026-08-14", "amount": 2500},
+                {"date": "2026-08-31", "amount": 2500},
             ],
         }
     ]
@@ -120,10 +120,111 @@ def test_regular_semi_monthly_pay_and_survival_targets():
     assert plan.pay_schedule_confidence == "high"
     periods = plan.scenarios[0].pay_periods
     assert [p.start_date for p in periods] == ["2026-08-01", "2026-08-16"]
+    assert periods[0].scheduled_income[0].date == "2026-08-14"
     assert periods[0].scheduled_income[0].amount == 2500
+    assert periods[1].scheduled_income[0].date == "2026-08-31"
     assert periods[0].required_starting_balance >= 300
     assert periods[1].required_starting_balance >= 300
     assert plan.recurring_safe_extra_payment >= 0
+
+
+def test_payroll_bonus_on_scheduled_date_is_excluded_from_regular_income():
+    income_tree = [
+        {
+            "source": "MICROSOFT",
+            "transactions": [
+                {"date": "2026-06-15", "amount": 3024.96, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-06-30", "amount": 3695.51, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-07-15", "amount": 3100.00, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-07-31", "amount": 3600.00, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-08-14", "amount": 3024.96, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-08-31", "amount": 3695.51, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-09-15", "amount": 16957.68, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-06-15", "amount": 420, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-06-30", "amount": 420, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-07-15", "amount": 420, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-07-31", "amount": 420, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-08-14", "amount": 420, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-08-31", "amount": 420, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-09-15", "amount": 420, "description": "MICROSOFT EDIPAYMENT"},
+                {"date": "2026-06-15", "amount": 150, "description": "MICROSOFT REIMBURSEMENT"},
+                {"date": "2026-06-30", "amount": 150, "description": "MICROSOFT REIMBURSEMENT"},
+            ],
+        }
+    ]
+
+    plan = build_cash_flow_plan(
+        as_of=date(2026, 9, 28),
+        month="2026-09",
+        accounts=[
+            CashFlowAccount(
+                id="checking",
+                name="Checking",
+                type="checking",
+                balance=500,
+            )
+        ],
+        spending_tree=[],
+        income_tree=income_tree,
+        recurring=[],
+        transfers=[],
+        period_days=180,
+        windfalls=[],
+        paychecks=[],
+        necessity_overrides=[],
+    )
+
+    deposits = [
+        item
+        for period in plan.scenarios[0].pay_periods
+        for item in period.scheduled_income
+    ]
+    assert [item.date for item in deposits] == ["2026-09-15", "2026-09-30"]
+    assert [item.amount for item in deposits] == [3770.0, 3770.0]
+    assert plan.pay_schedule_confidence == "high"
+    assert "16,957" not in str(plan.pay_schedule_description)
+
+
+def test_payroll_date_moves_before_federal_holiday():
+    income_tree = [
+        {
+            "source": "ACME PAYROLL",
+            "transactions": [
+                {"date": "2023-11-15", "amount": 2500},
+                {"date": "2023-11-30", "amount": 2500},
+                {"date": "2023-12-15", "amount": 2500},
+                {"date": "2023-12-29", "amount": 2500},
+            ],
+        }
+    ]
+
+    plan = build_cash_flow_plan(
+        as_of=date(2024, 1, 1),
+        month="2024-01",
+        accounts=[
+            CashFlowAccount(
+                id="checking",
+                name="Checking",
+                type="checking",
+                balance=500,
+            )
+        ],
+        spending_tree=[],
+        income_tree=income_tree,
+        recurring=[],
+        transfers=[],
+        period_days=90,
+        windfalls=[],
+        paychecks=[],
+        necessity_overrides=[],
+    )
+
+    deposits = [
+        item
+        for period in plan.scenarios[0].pay_periods
+        for item in period.scheduled_income
+    ]
+    assert [item.date for item in deposits] == ["2024-01-12", "2024-01-31"]
 
 
 def test_missing_pay_schedule_requests_focused_clarification():
@@ -198,7 +299,7 @@ def test_safe_debt_payment_preserves_buffer_and_minimums():
         for item in period.obligations
     )
     assert all(period.safe_extra_payment >= 0 for period in scenario.pay_periods)
-    assert scenario.safe_extra_payment < 1800 + 2500
+    assert scenario.safe_extra_payment < 1800 + 5000
 
 
 def test_ambiguous_recurring_charge_requests_classification():

@@ -213,13 +213,161 @@ def _consistent_amounts(amounts: list[Decimal]) -> bool:
     )
 
 
+def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
+    first = date(year, month, 1)
+    offset = (weekday - first.weekday()) % 7
+    return first + timedelta(days=offset + 7 * (occurrence - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    current = _month_date(year, month, 31)
+    return current - timedelta(days=(current.weekday() - weekday) % 7)
+
+
+def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
+    holiday = date(year, month, day)
+    if holiday.weekday() == 5:
+        return holiday - timedelta(days=1)
+    if holiday.weekday() == 6:
+        return holiday + timedelta(days=1)
+    return holiday
+
+
+def _us_federal_holidays(year: int) -> set[date]:
+    return {
+        _observed_fixed_holiday(year, 1, 1),
+        _nth_weekday(year, 1, 0, 3),
+        _nth_weekday(year, 2, 0, 3),
+        _last_weekday(year, 5, 0),
+        _observed_fixed_holiday(year, 6, 19),
+        _observed_fixed_holiday(year, 7, 4),
+        _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 10, 0, 2),
+        _observed_fixed_holiday(year, 11, 11),
+        _nth_weekday(year, 11, 3, 4),
+        _observed_fixed_holiday(year, 12, 25),
+    }
+
+
+def _previous_business_day(value: date) -> date:
+    holidays = (
+        _us_federal_holidays(value.year - 1)
+        | _us_federal_holidays(value.year)
+        | _us_federal_holidays(value.year + 1)
+    )
+    current = value
+    while current.weekday() >= 5 or current in holidays:
+        current -= timedelta(days=1)
+    return current
+
+
+def _scheduled_pay_dates(year: int, month: int) -> tuple[date, date]:
+    return (
+        _previous_business_day(date(year, month, 15)),
+        _previous_business_day(_month_date(year, month, 31)),
+    )
+
+
+def _regular_income_entries(
+    entries: list[tuple[date, Decimal]],
+) -> list[tuple[date, Decimal]]:
+    if len(entries) < 3:
+        return entries
+    typical = median(amount for _, amount in entries)
+    deviations = [abs(amount - typical) for _, amount in entries]
+    median_deviation = median(deviations)
+    band = max(money(250), typical * money("0.35"), median_deviation * money(3))
+    return [
+        (when, amount)
+        for when, amount in entries
+        if abs(amount - typical) <= band
+    ]
+
+
+def _scheduled_semimonthly_pay(
+    income_tree: list[dict[str, Any]],
+    year: int,
+    month: int,
+) -> tuple[list[ScheduledCashItem], str, str | None] | None:
+    best: tuple[int, str, list[tuple[date, Decimal]]] | None = None
+    for source, entries in _income_transactions(
+        income_tree,
+        payroll_only=True,
+    ).items():
+        totals_by_date: dict[date, Decimal] = defaultdict(lambda: ZERO)
+        for when, amount in entries:
+            totals_by_date[when] += amount
+        entries = sorted(totals_by_date.items())
+        scheduled_entries: list[tuple[date, Decimal]] = []
+        slots: set[str] = set()
+        for when, amount in entries:
+            mid_month, month_end = _scheduled_pay_dates(when.year, when.month)
+            if when == mid_month:
+                scheduled_entries.append((when, amount))
+                slots.add("mid")
+            elif when == month_end:
+                scheduled_entries.append((when, amount))
+                slots.add("end")
+        if slots != {"mid", "end"}:
+            continue
+        regular_entries = _regular_income_entries(scheduled_entries)
+        if len(regular_entries) < 2:
+            continue
+        score = len(regular_entries)
+        if best is None or score > best[0]:
+            best = (score, source, regular_entries)
+    if best is None:
+        return None
+
+    score, source, entries = best
+    typical = cents(median(amount for _, amount in entries))
+    dates = _scheduled_pay_dates(year, month)
+    confidence = "high" if score >= 4 else "medium"
+    items = [
+        ScheduledCashItem(
+            name=source,
+            amount=json_money(typical),
+            date=when.isoformat(),
+            category="paycheck",
+        )
+        for when in dates
+    ]
+    return (
+        items,
+        confidence,
+        f"15th and month-end pay from {source}, about ${typical:,.2f} per deposit",
+    )
+
+
 def _income_transactions(
     income_tree: list[dict[str, Any]],
+    *,
+    payroll_only: bool = False,
 ) -> dict[str, list[tuple[date, Decimal]]]:
     grouped: dict[str, list[tuple[date, Decimal]]] = defaultdict(list)
     for source in income_tree:
         name = str(source.get("source") or "Income")
         for txn in source.get("transactions") or []:
+            if payroll_only:
+                payroll_text = " ".join(
+                    (
+                        name,
+                        str(txn.get("merchant") or ""),
+                        str(txn.get("description") or ""),
+                    )
+                ).lower()
+                if not any(
+                    marker in payroll_text
+                    for marker in (
+                        "payroll",
+                        "salary",
+                        "paycheck",
+                        "direct deposit",
+                        "direct dep",
+                        "edipayment",
+                    )
+                ):
+                    continue
             when = _parse_date(txn.get("date"))
             amount = money(txn.get("amount"))
             if when and amount > ZERO:
@@ -251,6 +399,10 @@ def _infer_paychecks(
                 if _parse_date(item.date)
             )
             return items, "confirmed", description
+
+    scheduled = _scheduled_semimonthly_pay(income_tree, year, month)
+    if scheduled is not None:
+        return scheduled
 
     best: tuple[int, str, list[tuple[date, Decimal]]] | None = None
     for source, entries in _income_transactions(income_tree).items():
