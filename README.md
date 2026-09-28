@@ -10,9 +10,14 @@ Given:
 - your **goals** (e.g. "save $12k emergency fund by Dec", "extra $300/mo to mortgage"),
 
 it produces a **BudgetPlan** with:
-- per-category allocations,
+- full mandatory per-category allocations before goals or flexible spending,
 - a **petty-cash allocation** for the discretionary checking account,
-- goal contributions, feasibility-checked against income/outflow.
+- goal contributions, feasibility-checked against income/outflow,
+- a `mandatory_shortfall` when income cannot cover required spending.
+
+Credit-card minimums are included as mandatory spending. Institution or
+statement-provided minimums are preferred; when missing, BudgetAI uses a clearly
+labeled balance/APR estimate until the user confirms the statement amount.
 
 `POST /cash-flow-plan` also builds a deterministic current-month payday plan from
 account balances, categorized transactions, recurring bills, paycheck history,

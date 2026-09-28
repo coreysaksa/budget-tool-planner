@@ -475,6 +475,13 @@ def test_recurring_mandatory_taxonomy_aliases_are_scheduled():
         "fuel",
         "tolls",
         "transit",
+        "vehicle_registration",
+        "childcare",
+        "child_support",
+        "elder_care",
+        "essential_pet_care",
+        "professional_license",
+        "required_fees",
     }.issubset(_MANDATORY_LEAVES)
 
 

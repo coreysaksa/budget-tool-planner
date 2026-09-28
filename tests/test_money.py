@@ -12,7 +12,7 @@ def test_budget_allocations_reconcile_to_income_at_cent_precision():
     plan = build_plan(
         "2026-09",
         monthly_income=100,
-        analysis_by_category={"groceries": 10.005},
+        analysis_by_category={"food_household": 10.005},
         goals=[
             Goal(
                 id="goal",

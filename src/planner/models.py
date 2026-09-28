@@ -39,6 +39,7 @@ class BudgetPlan(BaseModel):
     petty_cash_allocation: float = 0.0
     goal_contributions: dict[str, float] = Field(default_factory=dict)
     unallocated: float = 0.0
+    mandatory_shortfall: float = 0.0
 
 
 class Windfall(BaseModel):
